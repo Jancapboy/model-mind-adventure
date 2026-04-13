@@ -6,7 +6,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.rule import Rule
-from rich.text import Text
 
 from .llm_client import generate_scene, get_client, synthesize_solution
 from .models import MENTAL_MODELS, MODEL_MAP

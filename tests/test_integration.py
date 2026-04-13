@@ -2,7 +2,7 @@
 import sys
 from unittest.mock import MagicMock, patch
 
-from model_mind_game.game import SCENARIO_INSIGHTS, console
+from model_mind_game.game import SCENARIO_INSIGHTS
 from model_mind_game.models import MENTAL_MODELS, MODEL_MAP
 from model_mind_game.scenarios import SCENARIOS
 
