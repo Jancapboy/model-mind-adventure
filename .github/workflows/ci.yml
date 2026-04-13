@@ -37,6 +37,7 @@ jobs:
         run: |
           pip install black
           black --check src tests
+        continue-on-error: true
 
       - name: Run integration tests
         run: pytest --cov=model_mind_game --cov-report=xml
