@@ -8,13 +8,13 @@ from rich.prompt import Prompt
 from rich.rule import Rule
 
 from .llm_client import generate_scene, get_client, synthesize_solution
-from .models import MENTAL_MODELS, MODEL_MAP
+from .models import MENTAL_MODELS
 from .scenarios import SCENARIOS
 
 # Pre-defined insights for reliable gameplay
 SCENARIO_INSIGHTS: Dict[str, Dict[str, str]] = {
     "第一章：失语的城": {
-        "network": "谣言网络显示，信息不再通过公开广场流动，而是通过少数密道家族控制的暗网传递。切断中心节点即可恢复公共话语。",
+        "network": "谣言通过少数家族控制的暗网流动，而非公开广场。切断中心节点即可恢复公共话语。",
         "power_law": "资源分配呈现极端幂律，3%的家族控制了80%的财富。这种不平等破坏了信任，使公开合作变得不可能。",
         "game_theory": "每个居民都陷入囚徒困境——公开说话会被报复，沉默更安全。除非改变激励结构，否则均衡就是集体沉默。",
         "markov": "城市已从『开放交流』稳态转移到了『猜疑稳态』。历史路径不重要，当前状态决定未来。",
@@ -151,7 +151,7 @@ def run_scenario(scenario, llm_client) -> bool:
                     insights.add(insight)
                     console.print(f"\n[green]★ 获得洞察：{insight}[/green]")
                 else:
-                    console.print(f"\n[dim]（已记录此洞察）[/dim]")
+                    console.print("\n[dim]（已记录此洞察）[/dim]")
 
             history_blocks.append(f"通过{model.name_zh}观察：{scene_text[:80]}...")
 

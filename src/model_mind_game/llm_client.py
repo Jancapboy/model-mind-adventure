@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+from .models import MentalModel
+
 try:
     from openai import OpenAI
 except ImportError:

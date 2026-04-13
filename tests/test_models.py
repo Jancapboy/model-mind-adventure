@@ -1,5 +1,4 @@
 """Unit tests for mental models definitions."""
-import pytest
 
 from model_mind_game.models import MENTAL_MODELS, MODEL_MAP
 
