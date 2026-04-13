@@ -1,5 +1,4 @@
 """Integration tests for the complete game package."""
-import sys
 from unittest.mock import patch
 
 from model_mind_game.game import SCENARIO_INSIGHTS
