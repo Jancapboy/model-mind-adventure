@@ -1,6 +1,6 @@
 """Integration tests for the complete game package."""
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from model_mind_game.game import SCENARIO_INSIGHTS
 from model_mind_game.models import MENTAL_MODELS, MODEL_MAP
