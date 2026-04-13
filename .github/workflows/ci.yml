@@ -31,13 +31,11 @@ jobs:
         run: |
           pip install ruff
           ruff check src tests
-        continue-on-error: true
 
       - name: Check formatting with black
         run: |
           pip install black
           black --check src tests
-        continue-on-error: true
 
       - name: Run integration tests
         run: pytest --cov=model_mind_game --cov-report=xml
