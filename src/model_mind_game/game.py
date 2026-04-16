@@ -270,9 +270,19 @@ def run_scenario(scenario, llm_client) -> bool:
             # Record insight
             insight = scenario_insights.get(model.id)
             if insight:
+                # 使用预定义的洞察
                 if insight not in insights:
                     insights.add(insight)
                     console.print(f"\n[green]★ 获得洞察：{insight}[/green]")
+                else:
+                    console.print("\n[dim]（已记录此洞察）[/dim]")
+            else:
+                # 没有预定义洞察，从AI生成的内容中提取关键句作为洞察
+                # 取场景文本的第一句或前80字作为洞察
+                generated_insight = scene_text.split('。')[0][:80] + "..."
+                if generated_insight not in insights:
+                    insights.add(generated_insight)
+                    console.print(f"\n[green]★ 获得洞察（AI生成）：{generated_insight}[/green]")
                 else:
                     console.print("\n[dim]（已记录此洞察）[/dim]")
 
