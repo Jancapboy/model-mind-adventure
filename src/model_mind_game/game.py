@@ -9,9 +9,9 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.columns import Columns
 
-from .llm_client import generate_scene, get_client, synthesize_solution, select_models_for_scenario
+from .llm_client import generate_scene, get_client, synthesize_solution, select_models_for_scenario, generate_new_scenario, generate_scenario_insights
 from .models import MENTAL_MODELS, MODEL_MAP
-from .scenarios import SCENARIOS
+from .scenarios import load_scenarios, save_scenarios, Scenario
 
 # 模型分组定义
 MODEL_GROUPS = {
@@ -204,10 +204,14 @@ def get_ai_selected_models(scenario, llm_client) -> List[str]:
         return ["network", "power_law", "game_theory", "threshold", "markov", "sir", "diversity_prediction"]
 
 
-def run_scenario(scenario, llm_client) -> bool:
+def run_scenario(scenario, llm_client, dynamic_insights: Optional[Dict[str, Dict[str, str]]] = None) -> bool:
     insights: Set[str] = set()
     history_blocks: List[str] = []
+    
+    # 合并预定义洞察和动态生成的洞察
     scenario_insights = SCENARIO_INSIGHTS.get(scenario.title, {})
+    if dynamic_insights and scenario.title in dynamic_insights:
+        scenario_insights.update(dynamic_insights[scenario.title])
     
     # AI选择7个最相关的模型
     ai_selected = get_ai_selected_models(scenario, llm_client)
@@ -346,15 +350,110 @@ def main():
     else:
         console.print("[yellow]⚠ AI场景生成未就绪，将使用本地描述继续游戏[/yellow]\n")
 
-    for scenario in SCENARIOS:
-        success = run_scenario(scenario, llm_client)
+    # 动态加载场景
+    scenarios = load_scenarios()
+    
+    # 动态场景洞察存储（用于AI生成的新场景）
+    dynamic_insights: Dict[str, Dict[str, str]] = {}
+    
+    chapter_num = 0
+    while chapter_num < len(scenarios):
+        scenario = scenarios[chapter_num]
+        success = run_scenario(scenario, llm_client, dynamic_insights)
+        if not success:
+            console.print("[red]你未能解开谜题，冒险结束。[/red]")
+            sys.exit(0)
+        console.print(Rule(style="green"))
+        chapter_num += 1
+    
+    # 所有预设场景完成后，询问是否生成新场景
+    while True:
+        console.print(Panel.fit(
+            "[bold bright_cyan]🎉 恭喜！你已完成所有预设章节！[/bold bright_cyan]\n\n"
+            f"已完成 {len(scenarios)} 个章节的挑战。",
+            border_style="bright_cyan",
+        ))
+        
+        if not llm_client:
+            console.print("[yellow]⚠ AI未连接，无法生成新场景。[/yellow]")
+            break
+        
+        choice = Prompt.ask(
+            "\n[新章节] (g)生成新章节  (r)随机生成  (c)自定义想法  (q)结束游戏",
+            choices=["g", "r", "c", "q"],
+            default="q",
+        )
+        
+        if choice == "q":
+            break
+        
+        # 准备生成新场景
+        player_idea = ""
+        if choice == "c":
+            console.print("\n[dim]请输入你的想法（例如：'一个AI觉醒的世界'、'气候危机下的资源战争'等）：[/dim]")
+            player_idea = Prompt.ask("你的想法")
+        
+        # 生成新场景
+        with console.status("[bold green]AI正在构思新章节..."):
+            new_scenario_data = generate_new_scenario(
+                player_idea=player_idea if choice == "c" else "",
+                client=llm_client,
+            )
+        
+        if not new_scenario_data:
+            console.print("[red]❌ 场景生成失败，请重试。[/red]")
+            continue
+        
+        # 创建新场景对象
+        new_scenario = Scenario(
+            id=new_scenario_data["id"],
+            title=new_scenario_data["title"],
+            base_setting=new_scenario_data["base_setting"],
+            required_insights=new_scenario_data["required_insights"],
+            hint=new_scenario_data["hint"],
+        )
+        
+        console.print(Panel(
+            f"[bold bright_green]新章节生成成功！[/bold bright_green]\n\n"
+            f"[bold]{new_scenario.title}[/bold]\n"
+            f"{new_scenario.base_setting[:100]}...\n\n"
+            f"[dim]需要洞察：{new_scenario.required_insights} 个[/dim]",
+            border_style="bright_green",
+        ))
+        
+        confirm = Prompt.ask(
+            "是否开始这个新章节？",
+            choices=["y", "n"],
+            default="y",
+        )
+        
+        if confirm == "n":
+            continue
+        
+        # 生成该场景的洞察
+        with console.status("[bold green]AI正在为场景生成模型洞察..."):
+            new_insights = generate_scenario_insights(
+                new_scenario.title,
+                new_scenario.base_setting,
+                llm_client,
+            )
+        
+        if new_insights:
+            dynamic_insights[new_scenario.title] = new_insights
+            console.print(f"[green]✓ 已为 {len(new_insights)} 个模型生成洞察[/green]\n")
+        
+        # 添加到场景列表并运行
+        scenarios.append(new_scenario)
+        
+        # 运行新场景
+        success = run_scenario(new_scenario, llm_client, dynamic_insights)
         if not success:
             console.print("[red]你未能解开谜题，冒险结束。[/red]")
             sys.exit(0)
         console.print(Rule(style="green"))
 
     console.print(Panel.fit(
-        "[bold bright_cyan]恭喜你完成了所有章节！[/bold bright_cyan]\n\n"
+        "[bold bright_cyan]游戏结束[/bold bright_cyan]\n\n"
         "你亲身体验了多模型思维的力量：\n"
         "  • 孔多塞陪审团定理——多数视角比单一视角更可靠\n"
         "  • 多样性预测定理——多样性的洞察相互抵消误差\n"

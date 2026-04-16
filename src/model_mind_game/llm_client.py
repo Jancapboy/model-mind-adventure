@@ -183,3 +183,146 @@ def _fallback_scene(title: str, model) -> str:
         f"世界呈现出新的纹理：{model.description}"
         "虽然AI连接暂时中断，但你的想象力填补了一切。"
     )
+
+
+def generate_new_scenario(
+    player_idea: str = "",
+    client: Optional[OpenAI] = None,
+) -> Optional[dict]:
+    """Generate a new scenario using AI.
+    
+    Args:
+        player_idea: Player's idea for the scenario (optional)
+        client: OpenAI client instance
+        
+    Returns:
+        dict with keys: id, title, base_setting, required_insights, hint
+        or None if generation fails
+    """
+    if client is None:
+        client = get_client()
+    if client is None:
+        return None
+    
+    if player_idea.strip():
+        # 基于玩家想法生成
+        system_prompt = (
+            "你是一位叙事游戏设计师。根据玩家的想法，创造一个《模型思维》风格的场景。"
+            "场景应该涉及复杂的社会/经济/政治困境，需要多个思维模型才能理解。"
+            "输出必须是有效的JSON格式。"
+        )
+        user_prompt = (
+            f"玩家的想法：{player_idea}\n\n"
+            "请生成一个场景，包含以下字段（JSON格式）：\n"
+            "- id: 章节ID（如 chapter_4）\n"
+            "- title: 章节标题（如 第四章：XXX）\n"  
+            "- base_setting: 场景设定描述（150-250字）\n"
+            "- required_insights: 需要收集的洞察数量（3-5）\n"
+            "- hint: 给玩家的提示\n\n"
+            "只输出JSON，不要其他内容。"
+        )
+    else:
+        # 随机生成
+        system_prompt = (
+            "你是一位叙事游戏设计师。创造一个全新的《模型思维》风格场景。"
+            "场景应该涉及复杂的社会/经济/政治困境，需要多个思维模型才能理解。"
+            "可以是：生态崩溃、技术革命、社会运动、战争危机、资源争夺等主题。"
+            "输出必须是有效的JSON格式。"
+        )
+        user_prompt = (
+            "请随机生成一个场景，包含以下字段（JSON格式）：\n"
+            "- id: 章节ID（如 chapter_4, chapter_5 等）\n"
+            "- title: 章节标题（如 第四章：XXX）\n"
+            "- base_setting: 场景设定描述（150-250字）\n"
+            "- required_insights: 需要收集的洞察数量（3-5）\n"
+            "- hint: 给玩家的提示\n\n"
+            "只输出JSON，不要其他内容。"
+        )
+    
+    try:
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.9,
+            max_tokens=800,
+        )
+        content = resp.choices[0].message.content.strip()
+        
+        # 提取JSON（处理可能的markdown代码块）
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
+        import json
+        scenario_data = json.loads(content)
+        
+        # 验证必要字段
+        required_fields = ["id", "title", "base_setting", "required_insights", "hint"]
+        for field in required_fields:
+            if field not in scenario_data:
+                return None
+        
+        return scenario_data
+    except Exception as exc:
+        return None
+
+
+def generate_scenario_insights(
+    scenario_title: str,
+    scenario_setting: str,
+    client: Optional[OpenAI] = None,
+) -> dict:
+    """Generate insights for all 20 mental models for a new scenario.
+    
+    Returns:
+        dict mapping model_id to insight string
+    """
+    if client is None:
+        client = get_client()
+    if client is None:
+        return {}
+    
+    from .models import MENTAL_MODELS
+    
+    system_prompt = (
+        "你是一位《模型思维》专家。为新场景生成每个思维模型的洞察。"
+        "洞察应该简洁（50-80字），说明该模型如何解释场景中的关键动态。"
+        "输出必须是有效的JSON格式，键是模型ID，值是洞察文本。"
+    )
+    
+    model_list = "\n".join([f"- {m.id}: {m.name_zh} — {m.description}" for m in MENTAL_MODELS])
+    
+    user_prompt = (
+        f"场景标题：{scenario_title}\n"
+        f"场景设定：{scenario_setting}\n\n"
+        f"可用模型（共20个）：\n{model_list}\n\n"
+        "请为每个模型生成洞察，输出JSON格式：{\"network\": \"洞察...\", ...}"
+    )
+    
+    try:
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=2000,
+        )
+        content = resp.choices[0].message.content.strip()
+        
+        # 提取JSON
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
+        import json
+        insights = json.loads(content)
+        return insights
+    except Exception:
+        return {}
