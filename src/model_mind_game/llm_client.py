@@ -15,7 +15,8 @@ except ImportError:
 def get_api_key() -> Optional[str]:
     """Read DeepSeek API key from .env file in project directory."""
     # 优先从项目目录的 .env 读取
-    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # llm_client.py 在 src/model_mind_game/，需要向上3级到项目根目录
+    project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env_path = os.path.join(project_dir, ".env")
     
     if os.path.exists(env_path):
