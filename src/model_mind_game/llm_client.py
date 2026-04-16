@@ -182,12 +182,16 @@ def predict_future_with_models(
     scenario_setting: str,
     insights: list,
     solution: str,
+    time_horizon: str = "3个月",
     client: Optional[OpenAI] = None,
 ) -> Optional[dict]:
     """Predict future scenario outcomes based on collected multi-model insights.
     
+    Args:
+        time_horizon: User-specified time horizon (e.g., "3个月", "1年", "5年")
+    
     Returns:
-        dict with keys: optimistic, pessimistic, critical_point
+        dict with keys: optimistic, pessimistic, critical_point, confidence, reasoning
         or None if prediction fails
     """
     if client is None:
@@ -195,21 +199,30 @@ def predict_future_with_models(
     if client is None:
         return None
     
+    # Calculate confidence based on number of insights (max 20)
+    confidence_score = min(len(insights) * 5, 100)  # 5% per insight, max 100%
+    
     system_prompt = (
-        "你是一位未来学家，基于《模型思维》的多模型分析预测场景走向。"
-        "玩家已收集多个模型的洞察并给出综合解答，你需要预测：\n"
-        "1. 乐观路径：如果积极因素占主导，3个月后场景如何\n"
-        "2. 悲观路径：如果消极因素占主导，3个月后场景如何\n"
-        "3. 临界点：什么条件下会发生状态跃迁（马尔可夫稳态转移）\n\n"
-        "输出JSON格式：{\"optimistic\": \"...\", \"pessimistic\": \"...\", \"critical_point\": \"...\"}"
+        f"你是一位未来学家，基于《模型思维》的多模型分析预测场景走向。"
+        f"玩家指定了预测时间范围：{time_horizon}。"
+        f"请根据这个时间尺度调整预测粒度：\n"
+        f"- 短期（天/周）：关注具体事件、即时反应\n"
+        f"- 中期（月/年）：关注趋势变化、结构演变\n"
+        f"- 长期（多年）：关注范式转移、根本变革\n\n"
+        f"同时给出预测置信度（当前基于{len(insights)}个洞察，理论上限100%）。\n\n"
+        f"输出JSON格式：\n"
+        f"{{\"optimistic\": \"...\", \"pessimistic\": \"...\", "
+        f"\"critical_point\": \"...\", \"confidence\": 75, \"reasoning\": \"...\"}}"
     )
     
     user_prompt = (
         f"场景：{scenario_title}\n"
-        f"设定：{scenario_setting}\n\n"
-        "玩家收集的洞察：\n" + "\n".join(f"- {i}" for i in insights) + "\n\n"
+        f"设定：{scenario_setting}\n"
+        f"预测时间范围：{time_horizon}\n\n"
+        f"玩家收集的洞察（共{len(insights)}个，影响置信度）：\n"
+        + "\n".join(f"- {i}" for i in insights) + "\n\n"
         f"玩家的综合解答：{solution}\n\n"
-        "请基于多模型交叉分析，预测场景的未来走向。"
+        f"请基于多模型交叉分析，预测{time_horizon}后的场景走向。"
     )
     
     try:
@@ -234,10 +247,13 @@ def predict_future_with_models(
         prediction = json.loads(content)
         
         # 验证必要字段
-        required_fields = ["optimistic", "pessimistic", "critical_point"]
+        required_fields = ["optimistic", "pessimistic", "critical_point", "confidence", "reasoning"]
         for field in required_fields:
             if field not in prediction:
-                prediction[field] = "预测生成失败"
+                if field == "confidence":
+                    prediction[field] = min(len(insights) * 5, 100)  # Fallback calculation
+                else:
+                    prediction[field] = "预测生成失败" if field != "confidence" else 50
         
         return prediction
     except Exception:

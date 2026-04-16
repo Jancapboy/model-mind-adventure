@@ -283,20 +283,32 @@ def run_scenario(scenario, llm_client, dynamic_insights: Optional[Dict[str, Dict
                         default="y",
                     )
                     if predict_choice == "y":
-                        with console.status("[bold cyan]AI正在基于多模型分析预测未来..."):
+                        # 让玩家输入预测时间
+                        console.print("\n[dim]你想预测多久后的未来？（例如：3天、2周、6个月、1年、5年）[/dim]")
+                        time_horizon = Prompt.ask("预测时间", default="3个月")
+                        
+                        with console.status(f"[bold cyan]AI正在分析{time_horizon}后的未来..."):
                             prediction = predict_future_with_models(
                                 scenario.title,
                                 scenario.base_setting,
                                 list(insights),
                                 result,
+                                time_horizon,
                                 llm_client,
                             )
                         if prediction:
+                            confidence = prediction.get('confidence', 50)
+                            confidence_color = "green" if confidence >= 70 else "yellow" if confidence >= 40 else "red"
+                            
                             console.print(Panel(
-                                f"[bold bright_cyan]🔮 基于多模型的未来预测[/bold bright_cyan]\n\n"
+                                f"[bold bright_cyan]🔮 基于多模型的未来预测[/bold bright_cyan]\n"
+                                f"[dim]预测时间范围：{time_horizon}[/dim]\n"
+                                f"[bold {confidence_color}]置信度：{confidence}%[/bold {confidence_color}] "
+                                f"（基于{len(insights)}个模型洞察）\n\n"
                                 f"[bold green]乐观路径：[/bold green]\n{prediction.get('optimistic', 'N/A')}\n\n"
                                 f"[bold red]悲观路径：[/bold red]\n{prediction.get('pessimistic', 'N/A')}\n\n"
-                                f"[bold yellow]⚡ 临界点：[/bold yellow]\n{prediction.get('critical_point', 'N/A')}",
+                                f"[bold yellow]⚡ 临界点：[/bold yellow]\n{prediction.get('critical_point', 'N/A')}\n\n"
+                                f"[dim]推理依据：{prediction.get('reasoning', 'N/A')[:150]}...[/dim]",
                                 border_style="bright_cyan",
                                 width=80,
                             ))
