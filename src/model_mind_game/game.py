@@ -9,7 +9,7 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.columns import Columns
 
-from .llm_client import generate_scene, get_client, synthesize_solution, select_models_for_scenario, generate_new_scenario, generate_scenario_insights, predict_future_with_models
+from .llm_client import generate_scene, get_client, synthesize_solution, select_models_for_scenario, generate_new_scenario, generate_scenario_insights, predict_future_with_models, predict_future_with_intervention
 from .models import MENTAL_MODELS, MODEL_MAP
 from .scenarios import load_scenarios, save_scenarios, Scenario
 
@@ -283,37 +283,90 @@ def run_scenario(scenario, llm_client, dynamic_insights: Optional[Dict[str, Dict
                         default="y",
                     )
                     if predict_choice == "y":
-                        # 让玩家输入预测时间
-                        console.print("\n[dim]你想预测多久后的未来？（例如：3天、2周、6个月、1年、5年）[/dim]")
-                        time_horizon = Prompt.ask("预测时间", default="3个月")
+                        # 选择预测类型
+                        predict_type = Prompt.ask(
+                            "[预测类型] (s)简单预测  (i)干预预测（指定时间点干预）",
+                            choices=["s", "i"],
+                            default="s",
+                        )
                         
-                        with console.status(f"[bold cyan]AI正在分析{time_horizon}后的未来..."):
-                            prediction = predict_future_with_models(
-                                scenario.title,
-                                scenario.base_setting,
-                                list(insights),
-                                result,
-                                time_horizon,
-                                llm_client,
-                            )
-                        if prediction:
-                            confidence = prediction.get('confidence', 50)
-                            confidence_color = "green" if confidence >= 70 else "yellow" if confidence >= 40 else "red"
+                        # 让玩家输入预测时间
+                        console.print("\n[dim]你想预测多久后的未来？（例如：3天、2周、6个月、1年）[/dim]")
+                        time_horizon = Prompt.ask("预测时间", default="6个月")
+                        
+                        if predict_type == "i":
+                            # 干预预测：输入干预时间和措施
+                            console.print(f"\n[dim]你想在什么时候干预？（必须在{time_horizon}之前，例如：2个月）[/dim]")
+                            intervention_time = Prompt.ask("干预时间点", default="2个月")
+                            console.print("\n[dim]干预措施是什么？（例如：切断谣言网络、改变激励机制）[/dim]")
+                            intervention_action = Prompt.ask("干预措施")
                             
-                            console.print(Panel(
-                                f"[bold bright_cyan]🔮 基于多模型的未来预测[/bold bright_cyan]\n"
-                                f"[dim]预测时间范围：{time_horizon}[/dim]\n"
-                                f"[bold {confidence_color}]置信度：{confidence}%[/bold {confidence_color}] "
-                                f"（基于{len(insights)}个模型洞察）\n\n"
-                                f"[bold green]乐观路径：[/bold green]\n{prediction.get('optimistic', 'N/A')}\n\n"
-                                f"[bold red]悲观路径：[/bold red]\n{prediction.get('pessimistic', 'N/A')}\n\n"
-                                f"[bold yellow]⚡ 临界点：[/bold yellow]\n{prediction.get('critical_point', 'N/A')}\n\n"
-                                f"[dim]推理依据：{prediction.get('reasoning', 'N/A')[:150]}...[/dim]",
-                                border_style="bright_cyan",
-                                width=80,
-                            ))
+                            with console.status(f"[bold cyan]AI正在分层预测（多模型→干预→未来）..."):
+                                prediction = predict_future_with_intervention(
+                                    scenario.title,
+                                    scenario.base_setting,
+                                    list(insights),
+                                    result,
+                                    time_horizon,
+                                    intervention_time,
+                                    intervention_action,
+                                    llm_client,
+                                )
+                            
+                            if prediction:
+                                confidence = prediction.get('confidence', 50)
+                                confidence_color = "green" if confidence >= 70 else "yellow" if confidence >= 40 else "red"
+                                
+                                console.print(Panel(
+                                    f"[bold bright_cyan]🔮 分层干预预测[/bold bright_cyan]\n"
+                                    f"[dim]总预测时间：{prediction.get('total_time', time_horizon)} | "
+                                    f"干预时间点：{prediction.get('intervention_time', intervention_time)}[/dim]\n"
+                                    f"[bold {confidence_color}]置信度：{confidence}%[/bold {confidence_color}]\n\n"
+                                    f"[bold white]━━━ 不干预路径 ━━━[/bold white]\n"
+                                    f"[green]乐观：[/green]{prediction['no_intervention'].get('optimistic', 'N/A')[:80]}...\n"
+                                    f"[red]悲观：[/red]{prediction['no_intervention'].get('pessimistic', 'N/A')[:80]}...\n\n"
+                                    f"[bold yellow]━━━ 干预路径（分层预测）━━━[/bold yellow]\n"
+                                    f"[dim]第一阶段（多模型预测到干预点）：[/dim]\n"
+                                    f"{prediction['intervention'].get('phase1_state', 'N/A')[:100]}...\n\n"
+                                    f"[dim]干预措施：{intervention_action}[/dim]\n"
+                                    f"[dim]第二阶段（干预后到终点）：[/dim]\n"
+                                    f"{prediction['intervention'].get('phase2_final_state', 'N/A')[:100]}...\n\n"
+                                    f"[yellow]干预影响：[/yellow]{prediction['intervention'].get('intervention_impact', 'N/A')[:80]}...",
+                                    border_style="bright_cyan",
+                                    width=85,
+                                ))
+                            else:
+                                console.print("[dim]预测生成失败。[/dim]")
                         else:
-                            console.print("[dim]预测生成失败。[/dim]")
+                            # 简单预测（原有逻辑）
+                            with console.status(f"[bold cyan]AI正在分析{time_horizon}后的未来..."):
+                                prediction = predict_future_with_models(
+                                    scenario.title,
+                                    scenario.base_setting,
+                                    list(insights),
+                                    result,
+                                    time_horizon,
+                                    llm_client,
+                                )
+                            
+                            if prediction:
+                                confidence = prediction.get('confidence', 50)
+                                confidence_color = "green" if confidence >= 70 else "yellow" if confidence >= 40 else "red"
+                                
+                                console.print(Panel(
+                                    f"[bold bright_cyan]🔮 基于多模型的未来预测[/bold bright_cyan]\n"
+                                    f"[dim]预测时间范围：{time_horizon}[/dim]\n"
+                                    f"[bold {confidence_color}]置信度：{confidence}%[/bold {confidence_color}] "
+                                    f"（基于{len(insights)}个模型洞察）\n\n"
+                                    f"[bold green]乐观路径：[/bold green]\n{prediction.get('optimistic', 'N/A')}\n\n"
+                                    f"[bold red]悲观路径：[/bold red]\n{prediction.get('pessimistic', 'N/A')}\n\n"
+                                    f"[bold yellow]⚡ 临界点：[/bold yellow]\n{prediction.get('critical_point', 'N/A')}\n\n"
+                                    f"[dim]推理依据：{prediction.get('reasoning', 'N/A')[:150]}...[/dim]",
+                                    border_style="bright_cyan",
+                                    width=80,
+                                ))
+                            else:
+                                console.print("[dim]预测生成失败。[/dim]")
                 
                 return True
             else:

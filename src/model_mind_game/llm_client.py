@@ -177,6 +177,157 @@ def select_models_for_scenario(
         return []
 
 
+def predict_future_with_intervention(
+    scenario_title: str,
+    scenario_setting: str,
+    insights: list,
+    solution: str,
+    total_time: str = "6个月",
+    intervention_time: str = "2个月",
+    intervention_action: str = "",
+    client: Optional[OpenAI] = None,
+) -> Optional[dict]:
+    """Two-phase prediction with player-specified intervention point.
+    
+    Returns:
+        dict with keys:
+        - no_intervention: direct prediction to total_time
+        - intervention_phase1: multi-model prediction to intervention_time
+        - intervention_phase2: AI prediction from intervention_time to total_time (after action)
+        - confidence: overall confidence score
+    """
+    if client is None:
+        client = get_client()
+    if client is None:
+        return None
+    
+    confidence_score = min(len(insights) * 5, 100)
+    
+    # Phase 1: Multi-model prediction to intervention point
+    system_prompt_1 = (
+        f"你是一位未来学家，基于《模型思维》的多模型分析预测场景走向。"
+        f"这是分层预测的第一阶段：预测到干预时间点。"
+        f"请基于玩家收集的模型洞察，预测到{intervention_time}时的场景状态。"
+        f"输出JSON：{{\"state_at_intervention\": \"...\", \"key_dynamics\": \"...\"}}"
+    )
+    
+    user_prompt_1 = (
+        f"场景：{scenario_title}\n"
+        f"设定：{scenario_setting}\n"
+        f"预测时间点：{intervention_time}\n\n"
+        f"玩家收集的洞察：\n" + "\n".join(f"- {i}" for i in insights) + "\n\n"
+        f"综合解答：{solution}\n\n"
+        f"请预测{intervention_time}时的场景状态。"
+    )
+    
+    try:
+        resp_1 = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt_1},
+                {"role": "user", "content": user_prompt_1},
+            ],
+            temperature=0.7,
+            max_tokens=500,
+        )
+        content_1 = resp_1.choices[0].message.content.strip()
+        
+        if "```json" in content_1:
+            content_1 = content_1.split("```json")[1].split("```")[0].strip()
+        elif "```" in content_1:
+            content_1 = content_1.split("```")[1].split("```")[0].strip()
+        
+        import json
+        phase1_result = json.loads(content_1)
+        state_at_intervention = phase1_result.get("state_at_intervention", "")
+        
+    except Exception:
+        return None
+    
+    # Phase 2: AI prediction from intervention point to total time (with intervention)
+    system_prompt_2 = (
+        f"你是一位未来学家。这是分层预测的第二阶段：干预后的发展。"
+        f"基于第一阶段的状态，考虑干预措施，预测到{total_time}的最终状态。"
+        f"输出JSON：{{\"final_state\": \"...\", \"intervention_impact\": \"...\"}}"
+    )
+    
+    user_prompt_2 = (
+        f"场景：{scenario_title}\n"
+        f"干预时间点({intervention_time})的状态：{state_at_intervention}\n\n"
+        f"干预措施：{intervention_action}\n\n"
+        f"请预测干预后，到{total_time}时的最终状态。"
+    )
+    
+    try:
+        resp_2 = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt_2},
+                {"role": "user", "content": user_prompt_2},
+            ],
+            temperature=0.8,
+            max_tokens=500,
+        )
+        content_2 = resp_2.choices[0].message.content.strip()
+        
+        if "```json" in content_2:
+            content_2 = content_2.split("```json")[1].split("```")[0].strip()
+        elif "```" in content_2:
+            content_2 = content_2.split("```")[1].split("```")[0].strip()
+        
+        phase2_result = json.loads(content_2)
+        
+    except Exception:
+        return None
+    
+    # Also get no-intervention prediction for comparison
+    system_prompt_no = (
+        f"基于《模型思维》的多模型分析，直接预测到{total_time}的场景状态（无干预）。"
+        f"输出JSON：{{\"optimistic\": \"...\", \"pessimistic\": \"...\", \"critical_point\": \"...\"}}"
+    )
+    
+    user_prompt_no = (
+        f"场景：{scenario_title}\n设定：{scenario_setting}\n"
+        f"洞察：\n" + "\n".join(f"- {i}" for i in insights) + "\n\n"
+        f"请直接预测{total_time}后的状态。"
+    )
+    
+    try:
+        resp_no = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt_no},
+                {"role": "user", "content": user_prompt_no},
+            ],
+            temperature=0.7,
+            max_tokens=600,
+        )
+        content_no = resp_no.choices[0].message.content.strip()
+        
+        if "```json" in content_no:
+            content_no = content_no.split("```json")[1].split("```")[0].strip()
+        elif "```" in content_no:
+            content_no = content_no.split("```")[1].split("```")[0].strip()
+        
+        no_intervention = json.loads(content_no)
+        
+    except Exception:
+        no_intervention = {"optimistic": "预测失败", "pessimistic": "预测失败", "critical_point": "预测失败"}
+    
+    return {
+        "no_intervention": no_intervention,
+        "intervention": {
+            "phase1_state": state_at_intervention,
+            "phase1_dynamics": phase1_result.get("key_dynamics", ""),
+            "phase2_final_state": phase2_result.get("final_state", ""),
+            "intervention_impact": phase2_result.get("intervention_impact", ""),
+        },
+        "confidence": confidence_score,
+        "intervention_time": intervention_time,
+        "total_time": total_time,
+    }
+
+
 def predict_future_with_models(
     scenario_title: str,
     scenario_setting: str,
