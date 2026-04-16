@@ -9,7 +9,7 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.columns import Columns
 
-from .llm_client import generate_scene, get_client, synthesize_solution, select_models_for_scenario, generate_new_scenario, generate_scenario_insights
+from .llm_client import generate_scene, get_client, synthesize_solution, select_models_for_scenario, generate_new_scenario, generate_scenario_insights, predict_future_with_models
 from .models import MENTAL_MODELS, MODEL_MAP
 from .scenarios import load_scenarios, save_scenarios, Scenario
 
@@ -274,6 +274,35 @@ def run_scenario(scenario, llm_client, dynamic_insights: Optional[Dict[str, Dict
                     f"[bold green]{result}[/bold green]",
                     border_style="green",
                 ))
+                
+                # 成功后询问是否查看未来预测
+                if llm_client and insights:
+                    predict_choice = Prompt.ask(
+                        "\n[预测] 是否基于多模型洞察查看未来走向？",
+                        choices=["y", "n"],
+                        default="y",
+                    )
+                    if predict_choice == "y":
+                        with console.status("[bold cyan]AI正在基于多模型分析预测未来..."):
+                            prediction = predict_future_with_models(
+                                scenario.title,
+                                scenario.base_setting,
+                                list(insights),
+                                result,
+                                llm_client,
+                            )
+                        if prediction:
+                            console.print(Panel(
+                                f"[bold bright_cyan]🔮 基于多模型的未来预测[/bold bright_cyan]\n\n"
+                                f"[bold green]乐观路径：[/bold green]\n{prediction.get('optimistic', 'N/A')}\n\n"
+                                f"[bold red]悲观路径：[/bold red]\n{prediction.get('pessimistic', 'N/A')}\n\n"
+                                f"[bold yellow]⚡ 临界点：[/bold yellow]\n{prediction.get('critical_point', 'N/A')}",
+                                border_style="bright_cyan",
+                                width=80,
+                            ))
+                        else:
+                            console.print("[dim]预测生成失败。[/dim]")
+                
                 return True
             else:
                 console.print(Panel(

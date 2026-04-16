@@ -177,6 +177,73 @@ def select_models_for_scenario(
         return []
 
 
+def predict_future_with_models(
+    scenario_title: str,
+    scenario_setting: str,
+    insights: list,
+    solution: str,
+    client: Optional[OpenAI] = None,
+) -> Optional[dict]:
+    """Predict future scenario outcomes based on collected multi-model insights.
+    
+    Returns:
+        dict with keys: optimistic, pessimistic, critical_point
+        or None if prediction fails
+    """
+    if client is None:
+        client = get_client()
+    if client is None:
+        return None
+    
+    system_prompt = (
+        "你是一位未来学家，基于《模型思维》的多模型分析预测场景走向。"
+        "玩家已收集多个模型的洞察并给出综合解答，你需要预测：\n"
+        "1. 乐观路径：如果积极因素占主导，3个月后场景如何\n"
+        "2. 悲观路径：如果消极因素占主导，3个月后场景如何\n"
+        "3. 临界点：什么条件下会发生状态跃迁（马尔可夫稳态转移）\n\n"
+        "输出JSON格式：{\"optimistic\": \"...\", \"pessimistic\": \"...\", \"critical_point\": \"...\"}"
+    )
+    
+    user_prompt = (
+        f"场景：{scenario_title}\n"
+        f"设定：{scenario_setting}\n\n"
+        "玩家收集的洞察：\n" + "\n".join(f"- {i}" for i in insights) + "\n\n"
+        f"玩家的综合解答：{solution}\n\n"
+        "请基于多模型交叉分析，预测场景的未来走向。"
+    )
+    
+    try:
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=800,
+        )
+        content = resp.choices[0].message.content.strip()
+        
+        # 提取JSON
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
+        import json
+        prediction = json.loads(content)
+        
+        # 验证必要字段
+        required_fields = ["optimistic", "pessimistic", "critical_point"]
+        for field in required_fields:
+            if field not in prediction:
+                prediction[field] = "预测生成失败"
+        
+        return prediction
+    except Exception:
+        return None
+
+
 def _fallback_scene(title: str, model) -> str:
     return (
         f"你站在{title}的迷雾中。当你戴上『{model.name_zh}』的眼镜时，"
