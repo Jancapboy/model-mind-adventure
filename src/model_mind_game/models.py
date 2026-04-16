@@ -202,7 +202,7 @@ MENTAL_MODELS: List[MentalModel] = [
             "请从信号模型的角度描述这个场景：强调信息不对称如何影响行为，"
             "可信信号的发送与解读，以及信号成本如何维持真实性。"
         ),
-        color="pink",
+        color="bright_red",
     ),
     MentalModel(
         id="mechanism_design",
@@ -213,7 +213,7 @@ MENTAL_MODELS: List[MentalModel] = [
             "请从机制设计的角度描述这个场景：强调规则如何塑造参与者的激励，"
             "机制如何引导自利行为达成社会目标，以及激励相容的重要性。"
         ),
-        color="grey",
+        color="bright_black",
     ),
     MentalModel(
         id="collective_action",
@@ -224,7 +224,7 @@ MENTAL_MODELS: List[MentalModel] = [
             "请从集体行动模型的角度描述这个场景：强调公共物品的供给困境，"
             "搭便车问题如何阻碍合作，以及克服集体行动困境的策略。"
         ),
-        color="dark_green",
+        color="green",
     ),
     MentalModel(
         id="path_dependence",
@@ -235,7 +235,7 @@ MENTAL_MODELS: List[MentalModel] = [
             "请从路径依赖的角度描述这个场景：强调早期选择如何锁定未来，"
             "历史偶然性的持续影响，以及转换成本如何维持现状。"
         ),
-        color="dark_blue",
+        color="blue",
     ),
 ]
 
