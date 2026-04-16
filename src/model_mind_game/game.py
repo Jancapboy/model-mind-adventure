@@ -323,15 +323,15 @@ def run_scenario(scenario, llm_client, dynamic_insights: Optional[Dict[str, Dict
                                     f"干预时间点：{prediction.get('intervention_time', intervention_time)}[/dim]\n"
                                     f"[bold {confidence_color}]置信度：{confidence}%[/bold {confidence_color}]\n\n"
                                     f"[bold white]━━━ 不干预路径 ━━━[/bold white]\n"
-                                    f"[green]乐观：[/green]{prediction['no_intervention'].get('optimistic', 'N/A')[:80]}...\n"
-                                    f"[red]悲观：[/red]{prediction['no_intervention'].get('pessimistic', 'N/A')[:80]}...\n\n"
+                                    f"[green]乐观：[/green]{prediction['no_intervention'].get('optimistic', 'N/A')}\n"
+                                    f"[red]悲观：[/red]{prediction['no_intervention'].get('pessimistic', 'N/A')}\n\n"
                                     f"[bold yellow]━━━ 干预路径（分层预测）━━━[/bold yellow]\n"
                                     f"[dim]第一阶段（多模型预测到干预点）：[/dim]\n"
-                                    f"{prediction['intervention'].get('phase1_state', 'N/A')[:100]}...\n\n"
+                                    f"{prediction['intervention'].get('phase1_state', 'N/A')}\n\n"
                                     f"[dim]干预措施：{intervention_action}[/dim]\n"
                                     f"[dim]第二阶段（干预后到终点）：[/dim]\n"
-                                    f"{prediction['intervention'].get('phase2_final_state', 'N/A')[:100]}...\n\n"
-                                    f"[yellow]干预影响：[/yellow]{prediction['intervention'].get('intervention_impact', 'N/A')[:80]}...",
+                                    f"{prediction['intervention'].get('phase2_final_state', 'N/A')}\n\n"
+                                    f"[yellow]干预影响：[/yellow]{prediction['intervention'].get('intervention_impact', 'N/A')}",
                                     border_style="bright_cyan",
                                     width=85,
                                 ))
