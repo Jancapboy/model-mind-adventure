@@ -13,17 +13,19 @@ except ImportError:
 
 
 def get_api_key() -> Optional[str]:
-    """Read DeepSeek API key from known locations."""
-    paths = [
-        os.path.expanduser("~/.openviking/ov.conf"),
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            with open(p, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("api_key"):
-                        return line.split("=", 1)[1].strip()
+    """Read DeepSeek API key from .env file in project directory."""
+    # 优先从项目目录的 .env 读取
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_path = os.path.join(project_dir, ".env")
+    
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("DEEPSEEK_API_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"\'')
+    
+    # 回退到环境变量
     return os.environ.get("DEEPSEEK_API_KEY")
 
 
@@ -120,6 +122,58 @@ def synthesize_solution(
         return resp.choices[0].message.content.strip()
     except Exception as exc:
         return f"[成功]（裁判离线：{exc}）"
+
+
+def select_models_for_scenario(
+    scenario_title: str,
+    scenario_base: str,
+    client: Optional[OpenAI] = None,
+) -> list:
+    """Use AI to select 7 most relevant mental models for this scenario."""
+    if client is None:
+        client = get_client()
+    if client is None:
+        return []
+
+    # Build model list for prompt
+    from .models import MENTAL_MODELS
+    model_list = "\n".join([f"- {m.id}: {m.name_zh} — {m.description}" for m in MENTAL_MODELS])
+
+    system_prompt = (
+        "你是一位《模型思维》专家。你的任务是根据场景内容，"
+        "从给定的思维模型列表中选择最相关的7个模型。"
+        "只返回模型ID列表，每行一个，不要解释。"
+        "选择标准：模型能最好地解释场景中的关键动态。"
+    )
+
+    user_prompt = (
+        f"场景名称：{scenario_title}\n"
+        f"场景设定：{scenario_base}\n\n"
+        f"可选模型（共20个）：\n{model_list}\n\n"
+        "请选出最相关的7个模型，只返回模型ID（如：network, power_law, ...）"
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.5,
+            max_tokens=200,
+        )
+        content = resp.choices[0].message.content.strip()
+        # Parse model IDs from response
+        selected = []
+        from .models import MODEL_MAP
+        for line in content.split("\n"):
+            line = line.strip().strip("- ,.")
+            if line in MODEL_MAP:
+                selected.append(line)
+        return selected[:7]
+    except Exception as exc:
+        return []
 
 
 def _fallback_scene(title: str, model) -> str:
